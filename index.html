@@ -1,0 +1,221 @@
+{% extends 'base.html' %} 
+{% block title %}Image Input{% endblock %}
+
+{% block css %}
+<!-- Additional CSS specific to index.html -->
+<style>
+  /* Custom CSS for index.html */
+  .form-container {
+    margin-top: 50px;
+  }
+  .result-container {
+    margin-top: 30px;
+  }
+  .result-card {
+    background: var(--transp-white-2);
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--transp-white-2);
+    border-radius: 10px;
+    color: rgb(5, 41, 51);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Box shadow */
+    padding: 20px;
+    max-width: 100%; /* Ensure it takes full width */
+    overflow: auto; /* Allow scrolling if the content is larger */
+    position: relative; /* For scrolling and positioning */
+  }
+  .result-image-container {
+    max-width: 100%; /* Full width of the card */
+    margin: 0 auto; /* Center the image horizontally */
+    overflow: hidden; /* Hide overflow if necessary */
+  }
+  .result-image {
+    width: 100%; /* Makes the image responsive */
+    height: auto; /* Maintain aspect ratio */
+    max-height: 80vh; /* Adjust height to fit within the viewport */
+  }
+  .scroll-to-result {
+    margin-top: 50px; /* Space for scrolling */
+  }
+</style>
+{% endblock css %}
+
+{% block body %}
+
+<div class="container card-main mt-5">
+  <form
+    class="col-6 mx-auto card p-3 shadow-lg"
+    method="post"
+    enctype="multipart/form-data"
+  >
+    {% csrf_token %}
+    <div class="container mt-4 text-center">
+      <h2 style="color: aliceblue">Plant Disease Classification</h2>
+    </div>
+    <hr />
+    <div class="mb-3">
+      <label class="form-label"
+        ><span class="container mt-4" style="color: aliceblue">Choose an option:</span></label
+      >
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="toggleSwitch" />
+        <label class="form-check-label" for="toggleSwitch"
+        style="color: aliceblue">Upload from device / Capture</label
+        >
+      </div>
+      <hr />
+      <div id="cameraOption">
+        <video
+          id="cameraView"
+          class="form-control"
+          style="display: none"
+        ></video>
+        <canvas id="cameraCanvas" style="display: none"></canvas>
+        <button type="button" class="btn btn-secondary d-block mx-auto" onclick="captureFromCamera()" style="margin-top: 5px; color: aliceblue;" >
+          Capture
+        </button>
+      </div>
+
+      <div id="uploadOption" style="display: none">
+        <input
+          type="file"
+          capture="camera"
+          name="plant_image"
+          id="uploadBtn"
+          class="form-control"
+          accept="image/*"
+          onchange="previewImage(this)"
+        />
+        <hr />
+        <label for="cameraBtn" class="btn btn-secondary d-block mx-auto d-none" style="margin-top: 5px; color: aliceblue;">Upload</label>
+      </div>
+
+      <div id="imagePreview" class="text-center" style="display: none">
+        <img
+          src="#"
+          alt="Image Preview"
+          style="max-width: 100%; max-height: 200px"
+        />
+      </div>
+    </div>
+    <button type="submit" class="btn btn-success" style="color: aliceblue">Classify</button>
+  </form>
+
+  <!-- Add this section to display the image -->
+  {% if image_data %}
+  <div class="container mt-5 scroll-to-result">
+    <div class="result-card">
+      <h2 class="text-center" style="color: aliceblue;">Result</h2>
+      <div class="result-image-container">
+        <img
+          src="data:image/png;base64, {{ image_data }}"
+          alt="Processed Image"
+          class="result-image"
+        />
+      </div>
+      <div class="text-center mt-3">
+        <h4 style="color: aliceblue;">Damage Type:</h4>
+        {% if predicted_labels %}
+          <p style="color: red;">{{ predicted_labels|join:", " }}</p>
+        {% else %}
+        <p style="color: green;">No damage detected</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  
+
+</div>
+
+<script>
+  function previewImage(input) {
+    var imagePreview = document.getElementById("imagePreview");
+    var fileInput = input;
+
+    if (fileInput.files && fileInput.files[0]) {
+      var reader = new FileReader();
+
+      reader.onload = function (e) {
+        imagePreview.innerHTML =
+          '<img src="' +
+          e.target.result +
+          '" alt="Image Preview" style="max-width: 100%; max-height: 200px;">';
+        imagePreview.style.display = "block";
+      };
+
+      reader.readAsDataURL(fileInput.files[0]);
+    } else {
+      imagePreview.style.display = "none";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var uploadOption = document.getElementById("uploadOption");
+    var cameraOption = document.getElementById("cameraOption");
+    var imagePreview = document.getElementById("imagePreview");
+    var toggleSwitch = document.getElementById("toggleSwitch");
+
+    // Set the default state to "Upload from device"
+    uploadOption.style.display = "block";
+    cameraOption.style.display = "none";
+    imagePreview.style.display = "none";
+    toggleSwitch.checked = false; // Ensure the switch is in the correct state
+
+    // Event listener for the switch
+    toggleSwitch.addEventListener("change", function () {
+      if (this.checked) {
+        uploadOption.style.display = "none";
+        cameraOption.style.display = "block";
+      } else {
+        uploadOption.style.display = "block";
+        cameraOption.style.display = "none";
+      }
+
+      imagePreview.style.display = "none"; // Hide image preview on switch change
+    });
+  });
+
+  // Function to capture photo from camera
+  function captureFromCamera() {
+    var video = document.getElementById("cameraView");
+    var canvas = document.getElementById("cameraCanvas");
+    var context = canvas.getContext("2d");
+
+    // Display the video element and hide the capture button
+    video.style.display = "block";
+    document
+      .getElementById("cameraOption")
+      .getElementsByTagName("button")[0].style.display = "none";
+
+    // Access the user's camera
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then(function (stream) {
+        video.srcObject = stream;
+      })
+      .catch(function (error) {
+        console.error("Error accessing the camera:", error);
+      });
+
+    // Capture a photo when the video is clicked
+    video.addEventListener("click", function () {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Stop the video stream
+      var tracks = video.srcObject.getTracks();
+      tracks.forEach(function (track) {
+        track.stop();
+      });
+
+      // Display the captured photo
+      var imageDataUrl = canvas.toDataURL("image/png");
+      document.getElementById("imagePreview").innerHTML =
+        '<img src="' +
+        imageDataUrl +
+        '" alt="Image Preview" style="max-width: 100%; max-height: 200px;">';
+      document.getElementById("imagePreview").style.display = "block";
+    });
+  }
+</script>
+
+{% endblock %}
